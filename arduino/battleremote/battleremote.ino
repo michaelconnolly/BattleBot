@@ -1,7 +1,6 @@
 // Import external libraries
 #include <Adafruit_ssd1306syp.h>
 #include "SoftwareSerial.h"
-#include <Servo.h>
 
 // Constants: I/O Pins
 #define PIN_BLUETOOTH_RECV 2
@@ -25,23 +24,18 @@ enum BluetoothState {
   BLUETOOTH_ABANDONDED
 };
 
-
 // Global Variables: Run state
 unsigned long startTime = 0; 
-const char build_timestamp[] =  __DATE__ " " __TIME__;
+const char buildTimestamp[] =  __DATE__ " " __TIME__;
 
 // Global Variables: the OLED Display, connected via I2C interface
 Adafruit_ssd1306syp display(PIN_I2C_SDA, PIN_I2C_SCL);
 
-// Global Variables: motor control
-int velocity = 100;  
-
-// Global Variables: Bluetooth command Queue
+// Global Variables: Bluetooth communication module
 SoftwareSerial bluetooth(PIN_BLUETOOTH_RECV, PIN_BLUETOOTH_SEND);
 BluetoothState bluetoothState = BLUETOOTH_DISCONNECTED;
-char command = 'S';
-char prevCommand = 'A';
-unsigned long timeLastCommand = 0;  //Stores the time when the last command was received from the phone
+int bluetoothEnabled = 0;
+
 
 /*** DISPLAY ***/
 
@@ -85,7 +79,7 @@ void displayStatus(String line1, String line2, String line3, String line4) {
   display.drawLine(0, beginStamp, 0, beginStamp + stampHeight, WHITE); // left line
   display.drawLine(SCREEN_WIDTH - 1, beginStamp, SCREEN_WIDTH - 1, beginStamp + stampHeight, WHITE); // right line
   display.setCursor(4, beginStamp + 2);
-  display.println(build_timestamp);
+  display.println(buildTimestamp);
 
   display.update();
 }
@@ -108,9 +102,6 @@ void displayMessage(String line1, String line2) {
 }
 
 
-int bluetoothEnabled = 0;
-String lastResponse;
-
 /**
  * Entrypoint: called once when the program first starts, just to initialize all the sub-components.
  */
@@ -128,10 +119,12 @@ void setup() {
   // Init LED pin, and initially set it to on.
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, HIGH);
+  Serial.println("LED setup complete...");
 
   // Init Joystick.
   pinMode(PIN_JOYSTICK_X, INPUT);
   pinMode(PIN_JOYSTICK_Y, INPUT);
+  Serial.println("Joystick setup complete...");
 
   // Init the serial pipe to the bluetooth receiver. NOTE: this can go faster by configuring the HC-05
   // with an AT command. But is that necessary?
@@ -140,13 +133,13 @@ void setup() {
   digitalWrite(PIN_BLUETOOTH_POWER, LOW);
   digitalWrite(PIN_BLUETOOTH_ENABLE, LOW);
   bluetoothEnabled = 0;
-
-  //swithToBluetoothCommandMode();
   bluetooth.begin(38400);
+  Serial.println("Bluetooth setup complete...");
   
   // Init the OLED display.
   delay(1000);
   display.initialize();
+  Serial.println("OLED setup complete...");
 
   // Init the rest of our internal state.
   Serial.println("setup end");
@@ -159,7 +152,8 @@ void setup() {
 void loop() {
   
   int now = millis();
-  char c;
+  //Serial.print("loop: ");
+  //Serial.println(now);
 
   // Bluetooth testing. 
   /*if (!bluetoothEnabled && ((now - startTime) > 5000)) {
@@ -176,42 +170,22 @@ void loop() {
     bluetoothEnabled = 4;
   } */
 
-
-     // Read from the Bluetooth module and send to the Arduino Serial Monitor
-    if (bluetooth.available())
-    {
-        c = bluetooth.read();
-        Serial.write("received: ");
-        Serial.write(c);
-        Serial.write(" (");
-        Serial.print(String(int(c)));
-        Serial.write(")\r\n");
-    }
-
+  // 
   if (!bluetoothEnabled && ((now - startTime) > 3000)) { 
     Serial.println("cmd mode start...");
-    //swithToBluetoothCommandMode();
+    swithToBluetoothCommandMode();
     Serial.println("cmd mode started");
 
-    //bluetooth.begin(38400);
-    
-      c = 'a';
-     bluetooth.write(c); 
-      c = 't';
-     bluetooth.write(c);
-     c = 13;
-     bluetooth.write(c); 
-      c = 10;
-     bluetooth.write(c);
-     Serial.println("cmd sent");
+    writeToBluetoothCommand("AT+VERSION?");
+    Serial.println("cmd sent");
      
-    //String response = readLineFromBluetooth();
+    String response;
+    response = readFromBluetoothCommand();
     //lastResponse = response;
 
     bluetoothEnabled = 1;
   }
     
-  
   // Update the LED screen with our current state.
   bool connected = (bluetoothState == BLUETOOTH_CONNECTED);
   int upSecs = (millis() - startTime) / 1000;
@@ -219,74 +193,91 @@ void loop() {
     connected ? F("CONNECTED") : F("DISCONNECTED"),
     "runtime: " + String(upSecs) + ", bstate=" + String(bluetoothEnabled),
     "stick: " + String(analogRead(PIN_JOYSTICK_X)) + "/" + String(analogRead(PIN_JOYSTICK_Y)),
-    "objective: " + String(lastResponse));
+    "objective: ");
 }
 
 
-String readLineFromBluetooth() {
+/*
+ * Write one line out to the bluetooth in command mode.
+ */
+void writeToBluetoothCommand(String data) {
+  bluetooth.println(data);
+}
+
+/**
+ * Read one line of text from the bluetooth during command mode; all responses are separeated by a CR/LF.
+ */
+String readFromBluetoothCommand() {
+  // Local read buffer, where we accumulate the response one character at a time.
+  #define READ_MAXLEN 100
+  char readbuffer[READ_MAXLEN + 1];
+
+  // We will give a limited amount of time for the bluetooth to respond.
   int startTime = millis();
   int endTime = startTime + 10000;
-  char readbuffer[100];
   
+  // Continue reading characters until we get to the end.
   int curr = 0;
   bool readComplete = false;
-  while (!readComplete && (millis() < endTime)) {
-    //if (bluetooth.available() > 0) {
-
-    int c = bluetooth.read();
-    if (c == -1) {
-      Serial.print(".");
-    } else {
-      Serial.println("\nbluetooth read: " + String(c));
+  while (!readComplete && (curr < READ_MAXLEN) && (millis() < endTime)) {
+    if (bluetooth.available()) {
+      char c = bluetooth.read();
+      //Serial.println("\nbluetooth read: " + String(c));
       readbuffer[curr++] = c;
+      if (c == 10)
+        readComplete = true;
     }
-    
+  }
 
-     /* while (curr < 100) {
-        int c = readbuffer[curr++] = bluetooth.read();
-        if (c == -1) {
-          readComplete = true;
-          break;
-        }
-      } */
-   // } else {
-    //  Serial.println("nothing on da bluetooth, boss");
-    //}
+  // If we did not read a full complete line, return the error signal.
+  if (!readComplete) {
+    return NULL;
   }
+
+  // cap off the CR/LF from the end of the response.
+  curr -= 2;
   readbuffer[curr++] = 0; 
-  
-  /*while (bluetooth.available() > 0) {
-    int c = readbuffer[curr++] = bluetooth.read();
-    if (c == -1)
-    break;
-  }
-  readbuffer[curr++] = 0; */
 
   String ret = String(readbuffer);
-  Serial.println("bluetooth read complete with: " + ret);
+  Serial.println("bluetooth read: " + ret);
   return ret;
 }
 
-
-void swithToBluetoothCommandMode() {
-  digitalWrite(PIN_BLUETOOTH_POWER, LOW);
-  delay(100);
-  digitalWrite(PIN_BLUETOOTH_ENABLE, HIGH);
-  delay(200);
-  digitalWrite(PIN_BLUETOOTH_POWER, HIGH);
-  delay(500);
-}
-
+/**
+ * Cycle the power on the bluetooth module, starting it back up in normal mode.
+ */
 void swithToBluetoothNormalMode() {
+  // power it down
   digitalWrite(PIN_BLUETOOTH_POWER, LOW);
   delay(100);
+
+  // power it up with the enable pin off.
   digitalWrite(PIN_BLUETOOTH_ENABLE, LOW);
   delay(200);
   digitalWrite(PIN_BLUETOOTH_POWER, HIGH);
-  delay(500);
+  delay(750);
 }
 
+/**
+ * Cycle the power on the bluetooth module, starting it back up in command mode.
+ */
+void swithToBluetoothCommandMode() {
+  // power it down
+  digitalWrite(PIN_BLUETOOTH_POWER, LOW);
+  delay(100);
+
+  // power it up with the enable pin on.
+  digitalWrite(PIN_BLUETOOTH_ENABLE, HIGH);
+  delay(200);
+  digitalWrite(PIN_BLUETOOTH_POWER, HIGH);
+  delay(750);
+}
+
+/**
+ * Turn the power off the bluetooth module.
+ */
 void swithToBluetoothOffMode() {
+  // power it down
   digitalWrite(PIN_BLUETOOTH_POWER, LOW);
   delay(100);
 }
