@@ -44,6 +44,9 @@ const char buildTimestamp[] =  __DATE__ " " __TIME__;
 // Global Variables: the OLED Display, connected via I2C interface
 Adafruit_ssd1306syp display(PIN_I2C_SDA, PIN_I2C_SCL);
 
+// Global Variables: Pulse state.
+unsigned long pulseLastTime = 0;
+
 // Global Variables: motor control
 int velocity = 100;  
 
@@ -55,13 +58,19 @@ int bluetoothAddressState = 0;
 char bluetoothAddress[15];
 
 char command = 'S';
-char prevCommand = 'A';
+char prevCommand = 'S';
 unsigned long timeLastCommand = 0;  //Stores the time when the last command was received from the phone
 
 // Global Variables: Servo Weapon
 Servo servoMotor; 
 float servoPos = 0.0;
 
+// To temporarily disable various subsystems, set these appropriately.
+boolean useMotors = true;
+boolean useLed = true;
+boolean useDisplay = true;
+boolean useBluetooth = true;
+boolean useServo = false;
 
 /**
  * Entrypoint: called once when the program first starts, just to initialize all the sub-components.
@@ -78,42 +87,53 @@ void setup() {
   Serial.println(F("setup start..."));
 
   // Init motor control pins.
-  pinMode(PIN_MOTOR_A_INPUT1, OUTPUT);
-  pinMode(PIN_MOTOR_A_INPUT2, OUTPUT);
-  pinMode(PIN_MOTOR_B_INPUT1, OUTPUT);
-  pinMode(PIN_MOTOR_B_INPUT2, OUTPUT);
-  pinMode(PIN_MOTOR_A_ENABLE, OUTPUT);
-  pinMode(PIN_MOTOR_B_ENABLE, OUTPUT);
-  Serial.println(F("Motor setup complete..."));
+  if (useMotors) {
+    pinMode(PIN_MOTOR_A_INPUT1, OUTPUT);
+    pinMode(PIN_MOTOR_A_INPUT2, OUTPUT);
+    pinMode(PIN_MOTOR_B_INPUT1, OUTPUT);
+    pinMode(PIN_MOTOR_B_INPUT2, OUTPUT);
+    pinMode(PIN_MOTOR_A_ENABLE, OUTPUT);
+    pinMode(PIN_MOTOR_B_ENABLE, OUTPUT);
+    Serial.println(F("Motor setup complete..."));
+  }
 
   // Init LED pin, and initially set it to off.
-  pinMode(PIN_LED, OUTPUT);
-  digitalWrite(PIN_LED, LOW);
-  Serial.println(F("LED setup complete..."));
+  if (useLed) {
+    pinMode(PIN_LED, OUTPUT);
+    digitalWrite(PIN_LED, HIGH);
+    Serial.println(F("LED setup complete..."));
+  }
 
   // Init the serial pipe to the bluetooth receiver
-  pinMode(PIN_BLUETOOTH_POWER, OUTPUT);
-  pinMode(PIN_BLUETOOTH_ENABLE, OUTPUT);
-  digitalWrite(PIN_BLUETOOTH_POWER, LOW);
-  digitalWrite(PIN_BLUETOOTH_ENABLE, LOW);
-  bluetoothAddressState = 0;
-  strcpy(bluetoothAddress, "unknown");
-  bluetooth.begin(38400);
-  Serial.println(F("Bluetooth setup complete..."));
+  if (useBluetooth) {
+    pinMode(PIN_BLUETOOTH_POWER, OUTPUT);
+    pinMode(PIN_BLUETOOTH_ENABLE, OUTPUT);
+    digitalWrite(PIN_BLUETOOTH_POWER, HIGH);
+    digitalWrite(PIN_BLUETOOTH_ENABLE, LOW);
+    bluetoothAddressState = 0;
+    strcpy(bluetoothAddress, "unknown");
+    bluetooth.begin(38400);
+    Serial.println(F("Bluetooth setup complete..."));
+  }
   
-  // Init the OLED display.
-  delay(1000);
-  display.initialize();
-  Serial.println(F("OLED setup complete..."));
+  // Init the OLED display
+  if (useDisplay) {
+    delay(1000);
+    display.initialize();
+    Serial.println(F("OLED setup complete..."));
+  }
 
-  // Servo eapon
-  servoMotor.attach(PIN_SERVO); 
-  servoPos = 0.0;
-  servoMotor.write(0.0);
-  Serial.println(F("Servo setup complete..."));
+  // Init the servo.
+  if (useServo) {
+    servoMotor.attach(PIN_SERVO); 
+    servoPos = 0.0;
+    servoMotor.write(0.0);
+    Serial.println(F("Servo setup complete..."));
+  }
 
   // Init the rest of our internal state.
   dead = false;
+  pulseLastTime = 0;
   Serial.println(F("setup end"));
 }
 
@@ -124,7 +144,7 @@ void setup() {
 void loop() {
 
   // Get the current time.
-  int now = millis();
+  unsigned long now = millis();
   
   // If we have marked as dead, be dead and do nothing.
   if (dead) { 
@@ -132,21 +152,27 @@ void loop() {
     return;
   }
 
+  // Engage auto-shutoff if it has been enabled.
+  if (autoShutOff && (millis() > (startTime + AUTO_SHUTOFF_TIME))) {
+    dead = true;
+    motorStop();
+    //displayMessage("Auto-Stop", "Stopped due to shutdown timer");
+    delay(3000);
+  }
+  
+  // Send the keep-alive pulse.
+  if (now > (pulseLastTime + 5000)) {
+    //Serial.println(F("Sending pulse"));
+    //bluetooth.write('@');
+    pulseLastTime = now;
+  }
+
   // Have we determined our bluetooth address yet?
   if (!bluetoothAddressState && ((now - startTime) > BLUETOOTH_DETECTION_TIME)) { 
-    switchToBluetoothCommandMode();
-    writeToBluetoothCommand("AT+ADDR?");
-    //writeToBluetoothCommand("AT");
+    // Write the default slave configuration.
+    bluetoothWriteSlaveConfiguration();
 
-    const char* response = readFromBluetoothCommand();
-    if (strlen(response) == 20) {
-      // +ADDR:98d3:b1:fd60df
-      strncpy(bluetoothAddress, response + 6, 14);
-    } else {
-      strcpy(bluetoothAddress, "invalid");
-    } 
-
-    switchToBluetoothNormalMode();
+    // Mark the flag so we dont probe this again.
     bluetoothAddressState = 1;
     Serial.print(F("bluetooth address is: "));
     Serial.println(bluetoothAddress);
@@ -164,24 +190,27 @@ void loop() {
   
   // Process the bluetooth command queue, which is all the commands from our remote control.
   bluetoothProcess();
-
-  // Update the LED screen with our current state.
-  bool connected = (bluetoothState == BLUETOOTH_CONNECTED);
-  int upSecs = (millis() - startTime) / 1000;
-  displayStatus(
-    connected ? "CONNECTED" : "DISCONNECTED",
-    "runtime: " + String(upSecs), 
-    "cmd: " + String(command) + "/" + String(prevCommand) + "   v: " + String(velocity),
-    "objective: " + String("KILL"));
-  
-  // Engage auto-shutoff if it has been enabled.
-  if (autoShutOff && (millis() > (startTime + AUTO_SHUTOFF_TIME))) {
-    dead = true;
-    motorStop();
-    //displayMessage("Auto-Stop", "Stopped due to shutdown timer");
-    delay(3000);
+ 
+  // Update the OLED screen with our current state.
+  if (useDisplay) {
+    bool connected = (bluetoothState == BLUETOOTH_CONNECTED);
+    int upSecs = (millis() - startTime) / 1000;
+    char cmdbuf[10];
+    strcpy(cmdbuf, "cmd: ");
+    cmdbuf[5] = command;
+    cmdbuf[6] = '/';
+    cmdbuf[7] = prevCommand;
+    cmdbuf[8] = 0;
+    displayStatus(
+      connected ? F("CONNECTED") : F("DISCONNECTED"),
+      "runtime: " + String(upSecs), 
+      // TODO: printing the command sometimes has a lf, so need to clean first.
+      cmdbuf,
+      "objective: " + String("KILL"));
   }
 }
+
+
 
 
 /** MOTOR CONTROL **/
@@ -276,6 +305,87 @@ void motorStop() {
 
 /**** BLUETOOTH ****/
 
+void bluetoothWriteSlaveConfiguration() { 
+  char commandBuffer[30];
+  commandBuffer[0] = 0;
+  const char *response;
+
+   // TODO: Read data from EEPROM
+  char * selfName = "battlebot";
+  char * selfPass = "666";
+
+  // Get the chip in command mode.
+  switchToBluetoothCommandMode();
+
+  // Probe the version; this should always work. 
+  writeToBluetoothCommand("AT+VERSION?");
+  response = readFromBluetoothCommand();
+  Serial.print(F("Bluetooth Version: "));
+  Serial.println(response);
+  response = readFromBluetoothCommand();
+  if (strcmp(response, "OK")) {
+     Serial.println(F("Failed to set name"));
+  }
+
+  // Reset the chip.
+  writeToBluetoothCommand("AT+RMAAD");
+  response = readFromBluetoothCommand();
+  if (strcmp(response, "OK")) {
+     Serial.println(F("Failed to reset"));
+  }
+
+  // Set the baud for the two bluetooth chips.
+  writeToBluetoothCommand("AT+UART=38400,0,0");
+  response = readFromBluetoothCommand();
+  if (strcmp(response, "OK")) {
+     Serial.println(F("Failed to set speed"));
+  }
+
+  // Set the advertised name. 
+  strcpy(commandBuffer, "AT+NAME=");
+  strcat(commandBuffer, selfName);
+  writeToBluetoothCommand(commandBuffer);
+  response = readFromBluetoothCommand();
+  if (strcmp(response, "OK")) {
+     Serial.println(F("Failed to set name"));
+  }
+
+  // Set master/slave mode to slave, so we will passively wait for a slave to connect to us. 
+  writeToBluetoothCommand("AT+ROLE=0");
+  response = readFromBluetoothCommand();
+  if (strcmp(response, "OK")) {
+     Serial.println(F("Failed to set role"));
+  }
+
+  // Set the slave passwd. 
+  strcpy(commandBuffer, "AT+PSWD=");
+  strcat(commandBuffer, selfPass);
+  writeToBluetoothCommand(commandBuffer);
+  response = readFromBluetoothCommand();
+  if (strcmp(response, "OK")) {
+     Serial.println(F("Failed to set pass"));
+  }
+
+   // Get the local bluetooth address.
+  writeToBluetoothCommand("AT+ADDR?");
+  response = readFromBluetoothCommand();
+  if (strlen(response) == 20) {
+    // +ADDR:98d3:b1:fd60df
+    strncpy(bluetoothAddress, response + 6, 14);
+  } else {
+    strcpy(bluetoothAddress, "invalid");
+    Serial.print(F("ERROR: got illegal bluetooth address: "));
+    Serial.println(response);
+  }
+  response = readFromBluetoothCommand();
+  if (strcmp(response, "OK")) {
+     Serial.println(F("Failed to set pass"));
+  }
+
+  // Back to normal operation mode.
+  switchToBluetoothNormalMode();
+}
+
 /*
  * Write one line out to the bluetooth in command mode.
  */
@@ -300,7 +410,8 @@ const char * readFromBluetoothCommand() {
   while (!readComplete && (curr < BLUETOOTH_READ_BUFFER) && (millis() < endTime)) {
     if (bluetooth.available()) {
       char c = bluetooth.read();
-      Serial.println("\nbluetooth read: " + String(c));
+      int code = (int) c;
+      //Serial.println("\nbluetooth read: " + String(code));
       bluetoothReadbuffer[curr++] = c;
       if (c == 10)
         readComplete = true;
@@ -326,10 +437,6 @@ const char * readFromBluetoothCommand() {
  */
 void switchToBluetoothNormalMode() {
   Serial.println(F("bluetooth normal mode starting..."));
-  
-  // power it down
-  digitalWrite(PIN_BLUETOOTH_POWER, LOW);
-  delay(500);
 
   // power it up with the enable pin off.
   digitalWrite(PIN_BLUETOOTH_ENABLE, LOW);
@@ -345,10 +452,6 @@ void switchToBluetoothNormalMode() {
  */
 void switchToBluetoothCommandMode() {
   Serial.println(F("bluetooth command mode starting..."));
-  
-  // power it down
-  digitalWrite(PIN_BLUETOOTH_POWER, LOW);
-  delay(500);
 
   // power it up with the enable pin on.
   digitalWrite(PIN_BLUETOOTH_ENABLE, HIGH);
@@ -488,27 +591,19 @@ void displayStatus(String line1, String line2, String line3, String line4) {
   int circleCenterX = (currentFrame < numFrames) ? (maxRight - currentFrame) : (maxLeft + (currentFrame - numFrames));
   display.drawCircle(circleCenterX, circleRadius + circleOffset, circleRadius, WHITE); 
 
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
   display.setCursor(0,16);
   display.println(line2);
-  //display.drawLine(0, 20, SCREEN_WIDTH - 1, 20, WHITE); 
 
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
   display.setCursor(0,26);
   display.println(line3);
-  //display.drawLine(0, 30, SCREEN_WIDTH - 1, 30, WHITE);
 
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
   display.setCursor(0,36);
   display.println(line4);
-  //display.drawLine(0, 40, SCREEN_WIDTH - 1, 40, WHITE);
 
+  // Print the local bluetooth address.
   int beginBlue = 46;
   display.setCursor(0, beginBlue);
-  display.print("blue:");
+  display.print(F("blue:"));
   display.setCursor(34, beginBlue);
   display.println(bluetoothAddress);
   
