@@ -724,14 +724,21 @@ void displayStatus(String line1, String line2, String line3, String line4) {
   display.setCursor(0,26);
   display.println(line3);
 
-  display.setCursor(0,36);
-  display.println(line4);
+  //display.setCursor(0,36);
+  //display.println(line4);
+
+    // Print the local bluetooth name.
+  int beginBlueName = 36;
+  display.setCursor(0, beginBlueName);
+  display.print(F("name:"));
+  display.setCursor(34, beginBlueName);
+  display.println(botConfig.bluetoothName);
 
   // Print the local bluetooth address.
-  int beginBlue = 46;
-  display.setCursor(0, beginBlue);
-  display.print(F("blue:"));
-  display.setCursor(34, beginBlue);
+  int beginBlueAddr = 46;
+  display.setCursor(0, beginBlueAddr);
+  display.print(F("addr:"));
+  display.setCursor(34, beginBlueAddr);
   display.println(bluetoothAddress);
   
   // Print the timestamp of when we built this code.
