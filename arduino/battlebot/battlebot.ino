@@ -1,7 +1,8 @@
 // Import external libraries
 #include <Adafruit_ssd1306syp.h>
-#include "SoftwareSerial.h"
+#include <SoftwareSerial.h>
 #include <Servo.h>
+#include <EEPROM.h>
 
 // Constants: I/O Pins
 #define PIN_BLUETOOTH_RECV    2
@@ -24,8 +25,12 @@
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 
-#define BLUETOOTH_DETECTION_TIME 8000
-#define BLUETOOTH_READ_BUFFER 30
+// Constants: Bluetooth
+#define BLUETOOTH_DETECTION_TIME  8000
+#define BLUETOOTH_PULSE_TIME      5000
+#define BLUETOOTH_READ_BUFFER     30
+#define BLUETOOTH_MAX_NAME_LEN    20
+#define BLUETOOTH_MAX_PASS_LEN    16
 
 // The various states of our bluetooth connection.
 enum BluetoothState {
@@ -34,8 +39,24 @@ enum BluetoothState {
   BLUETOOTH_ABANDONDED
 };
 
+typedef struct {
+  char bluetoothName[BLUETOOTH_MAX_NAME_LEN];
+  char bluetoothPass[BLUETOOTH_MAX_PASS_LEN];
+} BattleBotConfig;
+
+
+void displayStatus(String line1, String line2, String line3, String line4);
+
+// Global Variables: Feature Enablement.
+//  To temporarily disable various subsystems, set these appropriately.
+boolean useMotors = true;
+boolean useLed = true;
+boolean useDisplay = true;
+boolean useBluetooth = true;
+boolean useServo = false;
 
 // Global Variables: Run state
+BattleBotConfig botConfig;
 boolean dead = false;
 boolean autoShutOff = false;
 unsigned long startTime = 0; 
@@ -43,9 +64,6 @@ const char buildTimestamp[] =  __DATE__ " " __TIME__;
 
 // Global Variables: the OLED Display, connected via I2C interface
 Adafruit_ssd1306syp display(PIN_I2C_SDA, PIN_I2C_SCL);
-
-// Global Variables: Pulse state.
-unsigned long pulseLastTime = 0;
 
 // Global Variables: motor control
 int velocity = 100;  
@@ -56,6 +74,7 @@ BluetoothState bluetoothState = BLUETOOTH_DISCONNECTED;
 char bluetoothReadbuffer[BLUETOOTH_READ_BUFFER + 1];
 int bluetoothAddressState = 0;
 char bluetoothAddress[15];
+unsigned long bluetoothPulseLastTime = 0;
 
 char command = 'S';
 char prevCommand = 'S';
@@ -64,13 +83,6 @@ unsigned long timeLastCommand = 0;  //Stores the time when the last command was 
 // Global Variables: Servo Weapon
 Servo servoMotor; 
 float servoPos = 0.0;
-
-// To temporarily disable various subsystems, set these appropriately.
-boolean useMotors = true;
-boolean useLed = true;
-boolean useDisplay = true;
-boolean useBluetooth = true;
-boolean useServo = false;
 
 /**
  * Entrypoint: called once when the program first starts, just to initialize all the sub-components.
@@ -84,7 +96,10 @@ void setup() {
   // the robot into the USB port, and get real time debug messages.
   // Make sure you set the baudrate at 9600 in Serial Monitor as well.
   Serial.begin(9600);
-  Serial.println(F("setup start..."));
+  Serial.println(F("setup: begin..."));
+
+  // Read our config/saved-state from the local disk.
+  configImport();
 
   // Init motor control pins.
   if (useMotors) {
@@ -94,14 +109,14 @@ void setup() {
     pinMode(PIN_MOTOR_B_INPUT2, OUTPUT);
     pinMode(PIN_MOTOR_A_ENABLE, OUTPUT);
     pinMode(PIN_MOTOR_B_ENABLE, OUTPUT);
-    Serial.println(F("Motor setup complete..."));
+    Serial.println(F("setup: Motor complete..."));
   }
 
   // Init LED pin, and initially set it to off.
   if (useLed) {
     pinMode(PIN_LED, OUTPUT);
     digitalWrite(PIN_LED, HIGH);
-    Serial.println(F("LED setup complete..."));
+    Serial.println(F("setup: LED complete..."));
   }
 
   // Init the serial pipe to the bluetooth receiver
@@ -113,14 +128,14 @@ void setup() {
     bluetoothAddressState = 0;
     strcpy(bluetoothAddress, "unknown");
     bluetooth.begin(38400);
-    Serial.println(F("Bluetooth setup complete..."));
+    Serial.println(F("setup: Bluetooth complete..."));
   }
   
   // Init the OLED display
   if (useDisplay) {
     delay(1000);
     display.initialize();
-    Serial.println(F("OLED setup complete..."));
+    Serial.println(F("setup: OLED complete..."));
   }
 
   // Init the servo.
@@ -128,13 +143,13 @@ void setup() {
     servoMotor.attach(PIN_SERVO); 
     servoPos = 0.0;
     servoMotor.write(0.0);
-    Serial.println(F("Servo setup complete..."));
+    Serial.println(F("setup: Servo complete..."));
   }
 
   // Init the rest of our internal state.
   dead = false;
-  pulseLastTime = 0;
-  Serial.println(F("setup end"));
+  bluetoothPulseLastTime = 0;
+  Serial.println(F("setup: end"));
 }
 
 
@@ -160,36 +175,45 @@ void loop() {
     delay(3000);
   }
   
-  // Send the keep-alive pulse.
-  if (now > (pulseLastTime + 5000)) {
-    //Serial.println(F("Sending pulse"));
-    //bluetooth.write('@');
-    pulseLastTime = now;
-  }
+  // Bluetooth subsystem
+  if (useBluetooth) {
+    
+     // Send the keep-alive pulse.
+    if (now > (bluetoothPulseLastTime + BLUETOOTH_PULSE_TIME)) {
+      //Serial.println(F("Sending pulse"));
+      bluetooth.write('@');
+      bluetoothPulseLastTime = now;
+    }
 
-  // Have we determined our bluetooth address yet?
-  if (!bluetoothAddressState && ((now - startTime) > BLUETOOTH_DETECTION_TIME)) { 
-    // Write the default slave configuration.
-    bluetoothWriteSlaveConfiguration();
-
-    // Mark the flag so we dont probe this again.
-    bluetoothAddressState = 1;
-    Serial.print(F("bluetooth address is: "));
-    Serial.println(bluetoothAddress);
-  } 
-
-  /*for (servoPos = 0; servoPos <= 180; servoPos += 1) { // goes from 0 degrees to 180 degrees
-    // in steps of 1 degree
-    servoMotor.write(servoPos);              // tell servo to go to position in variable 'pos'
-    delay(15);                       // waits 15ms for the servo to reach the position
-  }
-  for (servoPos = 180; servoPos >= 0; servoPos -= 1) { // goes from 180 degrees to 0 degrees
-    servoMotor.write(servoPos);              // tell servo to go to position in variable 'pos'
-    delay(15);                       // waits 15ms for the servo to reach the position
-  } */
+    // Have we determined our bluetooth address yet?
+    if (!bluetoothAddressState && ((now - startTime) > BLUETOOTH_DETECTION_TIME)) { 
+      // Write the default slave configuration.
+      bluetoothWriteSlaveConfiguration();
   
-  // Process the bluetooth command queue, which is all the commands from our remote control.
-  bluetoothProcess();
+      // Mark the flag so we dont probe this again.
+      bluetoothAddressState = 1;
+      Serial.print(F("local bluetooth address is: "));
+      Serial.println(bluetoothAddress);
+    }
+
+     // If we are fully initialized, process the bluetooth command queue, which is all the 
+     //   commands from our remote control.
+    if (bluetoothAddressState) {
+      bluetoothProcess();
+    }
+  }
+
+  if (useServo) {
+      /*for (servoPos = 0; servoPos <= 180; servoPos += 1) { // goes from 0 degrees to 180 degrees
+      // in steps of 1 degree
+      servoMotor.write(servoPos);              // tell servo to go to position in variable 'pos'
+      delay(15);                       // waits 15ms for the servo to reach the position
+    }
+    for (servoPos = 180; servoPos >= 0; servoPos -= 1) { // goes from 180 degrees to 0 degrees
+      servoMotor.write(servoPos);              // tell servo to go to position in variable 'pos'
+      delay(15);                       // waits 15ms for the servo to reach the position
+    } */
+  }
  
   // Update the OLED screen with our current state.
   if (useDisplay) {
@@ -209,8 +233,6 @@ void loop() {
       "objective: " + String("KILL"));
   }
 }
-
-
 
 
 /** MOTOR CONTROL **/
@@ -310,12 +332,15 @@ void bluetoothWriteSlaveConfiguration() {
   commandBuffer[0] = 0;
   const char *response;
 
-   // TODO: Read data from EEPROM
-  char * selfName = "battlebot";
-  char * selfPass = "666";
-
   // Get the chip in command mode.
   switchToBluetoothCommandMode();
+  
+  // Reset the chip.
+  writeToBluetoothCommand("AT+RMAAD");
+  response = readFromBluetoothCommand();
+  if (strcmp(response, "OK")) {
+     Serial.println(F("Failed to reset"));
+  }
 
   // Probe the version; this should always work. 
   writeToBluetoothCommand("AT+VERSION?");
@@ -324,14 +349,7 @@ void bluetoothWriteSlaveConfiguration() {
   Serial.println(response);
   response = readFromBluetoothCommand();
   if (strcmp(response, "OK")) {
-     Serial.println(F("Failed to set name"));
-  }
-
-  // Reset the chip.
-  writeToBluetoothCommand("AT+RMAAD");
-  response = readFromBluetoothCommand();
-  if (strcmp(response, "OK")) {
-     Serial.println(F("Failed to reset"));
+     Serial.println(F("Failed to probe version"));
   }
 
   // Set the baud for the two bluetooth chips.
@@ -341,9 +359,10 @@ void bluetoothWriteSlaveConfiguration() {
      Serial.println(F("Failed to set speed"));
   }
 
-  // Set the advertised name. 
+  // Set the advertised name.
+  //assert(strlen(botConfig.bluetoothName) > 0);
   strcpy(commandBuffer, "AT+NAME=");
-  strcat(commandBuffer, selfName);
+  strcat(commandBuffer, botConfig.bluetoothName);
   writeToBluetoothCommand(commandBuffer);
   response = readFromBluetoothCommand();
   if (strcmp(response, "OK")) {
@@ -358,8 +377,9 @@ void bluetoothWriteSlaveConfiguration() {
   }
 
   // Set the slave passwd. 
+  //assert(strlen(botConfig.bluetoothPass) > 0);
   strcpy(commandBuffer, "AT+PSWD=");
-  strcat(commandBuffer, selfPass);
+  strcat(commandBuffer, botConfig.bluetoothPass);
   writeToBluetoothCommand(commandBuffer);
   response = readFromBluetoothCommand();
   if (strcmp(response, "OK")) {
@@ -450,7 +470,7 @@ void switchToBluetoothNormalMode() {
 /**
  * Cycle the power on the bluetooth module, starting it back up in command mode.
  */
-void switchToBluetoothCommandMode() {
+boolean switchToBluetoothCommandMode() {
   Serial.println(F("bluetooth command mode starting..."));
 
   // power it up with the enable pin on.
@@ -460,6 +480,21 @@ void switchToBluetoothCommandMode() {
   delay(750);
   
   Serial.println(F("bluetooth command mode started..."));
+
+  for (int i = 0 ; i < 6; i++) {
+    // Send the simple ack command to berify the command channel is up.
+    writeToBluetoothCommand("AT");
+    const char *response = readFromBluetoothCommand();
+    if (!strcmp(response, "OK")) {
+       Serial.print(F("bluetooth command mode established on try "));
+       Serial.println(i);
+       return true;
+    } 
+    delay(100);
+  }
+
+  Serial.println(F("bluetooth command mode FAILED to start"));
+  return false;
 }
 
 /**
@@ -565,6 +600,98 @@ void bluetoothProcess() {
   }
 }
 
+
+/**
+ *  CONFIG
+ */
+
+
+ #define READ_BUFFER_SIZE 20
+ 
+
+void configReset() {
+  Serial.println(F("configReset: factory reseting the config..."));
+  memset(&botConfig, sizeof(BattleBotConfig), 0);
+  strcpy(botConfig.bluetoothName, "battlebot-newb");
+  strcpy(botConfig.bluetoothPass, "666");
+}
+
+void configImport() {
+
+  // Init the global variable tht holds the config, restting back to the defaults.
+  configReset();
+
+  int memoryOffset = 0;
+  char readBuffer[READ_BUFFER_SIZE];
+  
+  // Read the magic number, and make sure it matches.
+  if (!configReadString(memoryOffset, readBuffer, READ_BUFFER_SIZE) || strcmp(readBuffer, "BTLBT")) {
+    Serial.println(F("configImport: could not read magic, sticking with default"));
+    return;
+  }
+
+  // Read the version number.
+  if (!configReadString(memoryOffset, readBuffer, READ_BUFFER_SIZE)) {
+    Serial.println(F("configImport: could not read version, sticking with default"));
+    return;
+  } 
+  if (strcmp(readBuffer, "1")) {
+    Serial.print(F("configImport: could not understand config version of "));
+    Serial.print(readBuffer);
+    Serial.println(F(", sticking with default"));
+    return;
+  }
+
+  // Read the rest of the data.
+  boolean success = configReadString(memoryOffset, botConfig.bluetoothName, BLUETOOTH_MAX_NAME_LEN) &&
+    configReadString(memoryOffset, botConfig.bluetoothPass, BLUETOOTH_MAX_PASS_LEN);
+  if (!success) {
+    Serial.println(F("configImport: could not read bluetoothConfig"));
+    configReset();
+    return;
+  }
+
+  Serial.println(F("configImport: successful import"));
+}
+
+
+/*
+ * Read one null-terminated string.
+ */
+boolean configReadString(int& memoryOffset, char *output, int outputMaxLen) {
+  
+  for (int i = 0 ; i < outputMaxLen ; i++) {
+    if (memoryOffset >= EEPROM.length()) {
+       Serial.println(F("configReadBytes: blew eeprom buffer"));
+       return false;
+    }
+
+    // Read from the EProm, and increment the current memory offset.
+    char c = EEPROM[memoryOffset++];
+
+    // Is this the null byte? If so, the output is done.
+    if (c == 0) {
+      output[i] = 0;
+      return true;
+    }
+
+    // Make sure this is a cool character.
+    if (!isAscii(c)) {
+      Serial.print(F("configReadBytes: illegal non-ascii char: "));
+      Serial.println((int) c);
+      return false;
+    }
+
+    // Copy it over.
+    output[i] = c;
+  }
+
+  // If we got here, we never hit the null byte.
+  Serial.println(F("configReadString: blew out the read buffer"));
+  return false;
+}
+
+ 
 /*** DISPLAY FUNCTIONS ***/
 
 /**
