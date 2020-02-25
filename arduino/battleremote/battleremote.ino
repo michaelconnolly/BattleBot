@@ -13,6 +13,12 @@
 #define PIN_JOYSTICK_X     A6
 #define PIN_JOYSTICK_Y     A7
 
+// Constants: knobs and buttons.
+#define PIN_BUTTON_YELLOW 4
+#define PIN_BUTTON_BLUE   5
+#define PIN_BUTTON_RED    6
+#define PIN_BUTTON_GREEN  7
+
 // More Constants
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -80,6 +86,12 @@ void setup() {
   bluetooth.begin(38400);
   switchToBluetoothNormalMode();
   Serial.println(F("Bluetooth setup complete..."));
+
+  // Init: knobs and buttons.
+  pinMode(PIN_BUTTON_YELLOW, INPUT);
+  pinMode(PIN_BUTTON_BLUE, INPUT);
+  pinMode(PIN_BUTTON_RED, INPUT);
+  pinMode(PIN_BUTTON_GREEN, INPUT);
   
   // Init the OLED display.
   delay(1000);
@@ -138,6 +150,12 @@ void loop() {
     bluetooth.write('S');
     lastCommand = 'S';
   }
+
+  // Loop: buttons and knobs.
+  processButton(PIN_BUTTON_YELLOW, '!');
+  processButton(PIN_BUTTON_BLUE, '@');
+  processButton(PIN_BUTTON_RED, '#');
+  processButton(PIN_BUTTON_GREEN, '$');
     
   // Update the LED screen with our current state.
   bool connected = (bluetoothState == BLUETOOTH_CONNECTED);
@@ -149,6 +167,25 @@ void loop() {
     "dude: " + String("yo"));
 }
 
+void processButton(int buttonId, char commandToSend) {
+
+  int buttonState = digitalRead(buttonId);
+
+  // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
+  if (buttonState == HIGH) {
+    // turn LED on:
+    //digitalWrite(ledPin, HIGH);
+    Serial.print("command to send: ");
+    Serial.println(commandToSend);
+    bluetooth.write(commandToSend);
+  }
+//  } else {
+//    // turn LED off:
+//    //digitalWrite(ledPin, LOW);
+//  }
+//  
+}
+
 
 /**
  * 
@@ -158,10 +195,14 @@ void bluetoothWriteMasterConfiguration() {
   commandBuffer[0] = 0;
   const char *response;
 
-  // TODO: Read data from EEPROM
-  char * selfName = "battlebotremote";
-  char * remoteAddress = "98d3,b1,fd60df";
-  char * remotePass = "666";
+  //  TODO: Read data from EEPROM
+    const char * selfName = "battlebotremote";
+  //  const char * remoteAddress = "98d3,b1,fd60df";
+  //  const char * remotePass = "666";
+ // const char * selfName = "mcbotremote";
+  const char * remoteAddress = "98d3,71,fd435c";
+  const char * remotePass = "666";
+
 
   // Get the chip in command mode.
   switchToBluetoothCommandMode();

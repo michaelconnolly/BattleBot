@@ -18,7 +18,7 @@
 #define PIN_I2C_SDA           A4
 #define PIN_I2C_SCL           A5
 #define PIN_SERVO             9
-
+ 
 // More Constants
 #define AUTO_SHUTOFF_TIME 30000
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -311,8 +311,8 @@ void bluetoothWriteSlaveConfiguration() {
   const char *response;
 
    // TODO: Read data from EEPROM
-  char * selfName = "battlebot";
-  char * selfPass = "666";
+  const char * selfName = "mcbot";
+  const char * selfPass = "666";
 
   // Get the chip in command mode.
   switchToBluetoothCommandMode();
