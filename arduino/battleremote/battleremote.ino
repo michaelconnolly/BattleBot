@@ -100,18 +100,13 @@ void setup() {
   bluetoothPulseLastSendTime = 0;
   bluetoothPulseLastRecvTime = 0;
   bluetooth.begin(38400);
-<<<<<<< HEAD
-  switchToBluetoothNormalMode();
-  Serial.println(F("Bluetooth setup complete..."));
+  Serial.println(F("setup: Bluetooth complete..."));
 
   // Init: knobs and buttons.
   pinMode(PIN_BUTTON_YELLOW, INPUT);
   pinMode(PIN_BUTTON_BLUE, INPUT);
   pinMode(PIN_BUTTON_RED, INPUT);
   pinMode(PIN_BUTTON_GREEN, INPUT);
-=======
-  Serial.println(F("setup: Bluetooth complete..."));
->>>>>>> 4fc5563b52d55b59562bd52098febdd8f6bef759
   
   // Init the OLED display.
   delay(1000);
@@ -251,18 +246,19 @@ void bluetoothWriteMasterConfiguration() {
   commandBuffer[0] = 0;
   const char *response;
 
-<<<<<<< HEAD
-  //  TODO: Read data from EEPROM
-    const char * selfName = "battlebotremote";
-  //  const char * remoteAddress = "98d3,b1,fd60df";
-  //  const char * remotePass = "666";
- // const char * selfName = "mcbotremote";
-  const char * remoteAddress = "98d3,71,fd435c";
-  const char * remotePass = "666";
+//<<<<<<< HEAD
+//  //  TODO: Read data from EEPROM
+//    const char * selfName = "battlebotremote";
+//  //  const char * remoteAddress = "98d3,b1,fd60df";
+//  //  const char * remotePass = "666";
+// // const char * selfName = "mcbotremote";
+//  const char * remoteAddress = "98d3,71,fd435c";
+//  const char * remotePass = "666";
+//
+//
+//=======
+//>>>>>>> 4fc5563b52d55b59562bd52098febdd8f6bef759
 
-
-=======
->>>>>>> 4fc5563b52d55b59562bd52098febdd8f6bef759
   // Get the chip in command mode.
   switchToBluetoothCommandMode();
 
