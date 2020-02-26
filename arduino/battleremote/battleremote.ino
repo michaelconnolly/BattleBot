@@ -273,19 +273,6 @@ void bluetoothWriteMasterConfiguration() {
   commandBuffer[0] = 0;
   const char *response;
 
-//<<<<<<< HEAD
-//  //  TODO: Read data from EEPROM
-//    const char * selfName = "battlebotremote";
-//  //  const char * remoteAddress = "98d3,b1,fd60df";
-//  //  const char * remotePass = "666";
-// // const char * selfName = "mcbotremote";
-//  const char * remoteAddress = "98d3,71,fd435c";
-//  const char * remotePass = "666";
-//
-//
-//=======
-//>>>>>>> 4fc5563b52d55b59562bd52098febdd8f6bef759
-
   // Get the chip in command mode.
   switchToBluetoothCommandMode();
 

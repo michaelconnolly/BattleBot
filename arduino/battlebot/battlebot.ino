@@ -332,13 +332,6 @@ void bluetoothWriteSlaveConfiguration() {
   commandBuffer[0] = 0;
   const char *response;
 
-<<<<<<< HEAD
-   // TODO: Read data from EEPROM
-  const char * selfName = "mcbot";
-  const char * selfPass = "666";
-
-=======
->>>>>>> 4fc5563b52d55b59562bd52098febdd8f6bef759
   // Get the chip in command mode.
   switchToBluetoothCommandMode();
   
