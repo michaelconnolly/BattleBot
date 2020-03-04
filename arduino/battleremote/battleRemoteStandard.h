@@ -11,6 +11,7 @@ class battleRemoteStandard {
 		~battleRemoteStandard();
 	
 		String getName();
+    String getJoystickInfo();
 		void setup();
 		void loop();
 
@@ -19,4 +20,5 @@ class battleRemoteStandard {
 		SoftwareSerial* getBluetooth();
 		void processButton(int buttonId, char commandToSend);
 		void processKnob(int knobId, int &knobValueOld);
+    void processJoystick(int pinX, int pinY);
 };

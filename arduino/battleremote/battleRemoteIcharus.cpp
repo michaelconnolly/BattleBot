@@ -34,9 +34,8 @@ void battleRemoteIcharus::setup() {
 
   battleRemoteStandard::setup();
 
-	Serial.print(F("Setup: "));
+	Serial.print(F("setup: "));
   Serial.println(this->getName());
-	
 	
 	// Init: knobs and buttons.
   pinMode(PIN_BUTTON_2, INPUT);
@@ -44,6 +43,7 @@ void battleRemoteIcharus::setup() {
   pinMode(PIN_BUTTON_4, INPUT);
   pinMode(PIN_KNOB_1, INPUT);
   pinMode(PIN_KNOB_2, INPUT);
+  Serial.println(F("\tmore knobs and buttons"));
 }
 	
 

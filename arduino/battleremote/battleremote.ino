@@ -12,8 +12,6 @@
 #define PIN_LED            10
 #define PIN_I2C_SDA        A4
 #define PIN_I2C_SCL        A5
-#define PIN_JOYSTICK_X     A6
-#define PIN_JOYSTICK_Y     A7
 
 // More Constants
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -55,7 +53,7 @@ unsigned long bluetoothPulseLastSendTime = 0;
 unsigned long bluetoothPulseLastRecvTime = 0;
 
 // Driving state.
-char lastCommand = 0;
+//char lastCommand = 0;
 
 // Remote class that implements all business logic.
 battleRemoteIcharus* remote = new battleRemoteIcharus(&bluetooth);
@@ -83,11 +81,6 @@ void setup() {
   digitalWrite(PIN_LED, HIGH);
   Serial.println(F("setup: LED complete..."));
 
-  // Init Joystick.
-  pinMode(PIN_JOYSTICK_X, INPUT);
-  pinMode(PIN_JOYSTICK_Y, INPUT);
-  Serial.println(F("setup: Joystick complete..."));
-
   // Init the Bluetooth Module.
   pinMode(PIN_BLUETOOTH_POWER, OUTPUT);
   pinMode(PIN_BLUETOOTH_ENABLE, OUTPUT);
@@ -110,7 +103,7 @@ void setup() {
   Serial.println(F("setup: OLED complete..."));
 
   // Init the rest of our internal state.
-  lastCommand = 0;
+  //lastCommand = 0;
   Serial.println(F("setup: end"));
 }
 
@@ -173,40 +166,42 @@ void loop() {
     }
   }
 
-  // Basic joystick control. TODO: we can get way more precise with this joystick!
-  int joystickX = analogRead(PIN_JOYSTICK_X);
-  int joystickY = analogRead(PIN_JOYSTICK_Y);
-  if (joystickY > 600) {
-    Serial.println(F("Sending forward"));
-    bluetooth.write('F');
-    lastCommand = 'F';
-  } else if (joystickY < 400) {
-    Serial.println(F("Sending reverse"));
-    bluetooth.write('B');
-    lastCommand = 'B';
-  } else if (joystickX > 600) {
-    Serial.println(F("Sending right"));
-    bluetooth.write('R');
-    lastCommand = 'R';
-  } else if (joystickX < 400) {
-    Serial.println(F("Sending left"));
-    bluetooth.write('L');
-    lastCommand = 'L';
-  } else if (lastCommand != 'S') {
-    Serial.println(F("Sending stop"));
-    bluetooth.write('S');
-    lastCommand = 'S';
-  }
+//  // Basic joystick control. TODO: we can get way more precise with this joystick!
+//  int joystickX = analogRead(PIN_JOYSTICK_X);
+//  int joystickY = analogRead(PIN_JOYSTICK_Y);
+//  if (joystickY > 600) {
+//    Serial.println(F("Sending forward"));
+//    bluetooth.write('F');
+//    lastCommand = 'F';
+//  } else if (joystickY < 400) {
+//    Serial.println(F("Sending reverse"));
+//    bluetooth.write('B');
+//    lastCommand = 'B';
+//  } else if (joystickX > 600) {
+//    Serial.println(F("Sending right"));
+//    bluetooth.write('R');
+//    lastCommand = 'R';
+//  } else if (joystickX < 400) {
+//    Serial.println(F("Sending left"));
+//    bluetooth.write('L');
+//    lastCommand = 'L';
+//  } else if (lastCommand != 'S') {
+//    Serial.println(F("Sending stop"));
+//    bluetooth.write('S');
+//    lastCommand = 'S';
+//  }
 
 
     
   // Update the LED screen with our current state.
   bool connected = (bluetoothState == BLUETOOTH_CONNECTED);
   int upSecs = (millis() - startTime) / 1000;
+  String joystickInfo = remote->getJoystickInfo();
+  
   displayStatus(
     connected ? F("CONNECTED") : F("DISCONNECTED"),
     "runtime: " + String(upSecs) + ", bstate=" + String(bluetoothEnabled),
-    "stick: " + String(joystickX) + "/" + String(joystickY),
+    joystickInfo,
     "dude: " + String("yo"));
 
 
