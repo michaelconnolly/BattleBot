@@ -2,7 +2,7 @@
 #include <Adafruit_ssd1306syp.h>
 #include <SoftwareSerial.h>
 #include <EEPROM.h>
-#include "custom_remote.h"
+#include "battleRemoteIcharus.h"
 
 // Constants: I/O Pins
 #define PIN_BLUETOOTH_RECV 2
@@ -58,7 +58,7 @@ unsigned long bluetoothPulseLastRecvTime = 0;
 char lastCommand = 0;
 
 // Remote class that implements all business logic.
-custom_remote* remote = new custom_remote(&bluetooth);
+battleRemoteIcharus* remote = new battleRemoteIcharus(&bluetooth);
 
 
 /**
@@ -102,9 +102,6 @@ void setup() {
   Serial.println(F("setup: Bluetooth complete..."));
 
   // Custom Remote logic.
-  //remote = new custom_remote(bluetooth);
-  Serial.print(F("setup: custom remote logic: "));
-  Serial.println(remote->getName());
   remote->setup();
   
   // Init the OLED display.
@@ -591,11 +588,5 @@ void displayStatus(String line1, String line2, String line3, String line4) {
   display.setCursor(4, beginStamp + 2);
   display.println(buildTimestamp);
 
-//Serial.println("a");
-  
-
   display.update();
-
-  //Serial.println("a");
-  
 }
