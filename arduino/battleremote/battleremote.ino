@@ -2,6 +2,7 @@
 #include <Adafruit_ssd1306syp.h>
 #include <SoftwareSerial.h>
 #include <EEPROM.h>
+#include "custom_remote.h"
 
 // Constants: I/O Pins
 #define PIN_BLUETOOTH_RECV 2
@@ -14,15 +15,15 @@
 #define PIN_JOYSTICK_X     A6
 #define PIN_JOYSTICK_Y     A7
 
-// Constants: knobs and buttons.
-#define PIN_BUTTON_YELLOW 4
-#define PIN_BUTTON_BLUE   5
-#define PIN_BUTTON_RED    6
-#define PIN_BUTTON_GREEN  7
-#define PIN_KNOB_BLUE  A3
-#define PIN_KNOB_RED  A2
-int knobBlueValue = 0;
-int knobRedValue = 0;
+//// Constants: knobs and buttons.
+//#define PIN_BUTTON_YELLOW 4
+//#define PIN_BUTTON_BLUE   5
+//#define PIN_BUTTON_RED    6
+//#define PIN_BUTTON_GREEN  7
+//#define PIN_KNOB_BLUE  A3
+//#define PIN_KNOB_RED  A2
+//int knobBlueValue = 0;
+//int knobRedValue = 0;
 
 // More Constants
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
@@ -66,6 +67,12 @@ unsigned long bluetoothPulseLastRecvTime = 0;
 // Driving state.
 char lastCommand = 0;
 
+// Remote class that implements all business logic.
+//void DebugMessage(char* message);
+custom_remote* remote = new custom_remote(&bluetooth);
+//string my_string = string("foo");
+
+
 /**
  * Entrypoint: called once when the program first starts, just to initialize all the sub-components.
  */
@@ -106,13 +113,19 @@ void setup() {
   bluetooth.begin(38400);
   Serial.println(F("setup: Bluetooth complete..."));
 
-  // Init: knobs and buttons.
-  pinMode(PIN_BUTTON_YELLOW, INPUT);
-  pinMode(PIN_BUTTON_BLUE, INPUT);
-  pinMode(PIN_BUTTON_RED, INPUT);
-  pinMode(PIN_BUTTON_GREEN, INPUT);
-  pinMode(PIN_KNOB_BLUE, INPUT);
-  pinMode(PIN_KNOB_RED, INPUT);
+// // Init: knobs and buttons.
+//  pinMode(PIN_BUTTON_YELLOW, INPUT);
+//  pinMode(PIN_BUTTON_BLUE, INPUT);
+//  pinMode(PIN_BUTTON_RED, INPUT);
+//  pinMode(PIN_BUTTON_GREEN, INPUT);
+//  pinMode(PIN_KNOB_BLUE, INPUT);
+//  pinMode(PIN_KNOB_RED, INPUT);
+
+  // Custom Remote logic.
+  //remote = new custom_remote(bluetooth);
+  Serial.print(F("setup: custom remote logic: "));
+  Serial.println(remote->getName());
+  remote->setup();
   
   // Init the OLED display.
   delay(1000);
@@ -208,13 +221,7 @@ void loop() {
     lastCommand = 'S';
   }
 
-  // Loop: buttons and knobs.
-  processButton(PIN_BUTTON_YELLOW, '!');
-  processButton(PIN_BUTTON_BLUE, '@');
-  processButton(PIN_BUTTON_RED, '#');
-  processButton(PIN_BUTTON_GREEN, '$');
-  processKnob(PIN_KNOB_BLUE, knobBlueValue);
-  processKnob(PIN_KNOB_RED, knobRedValue);
+
     
   // Update the LED screen with our current state.
   bool connected = (bluetoothState == BLUETOOTH_CONNECTED);
@@ -224,45 +231,59 @@ void loop() {
     "runtime: " + String(upSecs) + ", bstate=" + String(bluetoothEnabled),
     "stick: " + String(joystickX) + "/" + String(joystickY),
     "dude: " + String("yo"));
+
+
+// // Loop: buttons and knobs.
+//  processButton(PIN_BUTTON_YELLOW, '!');
+//  processButton(PIN_BUTTON_BLUE, '@');
+//  processButton(PIN_BUTTON_RED, '#');
+//  processButton(PIN_BUTTON_GREEN, '$');
+//  processKnob(PIN_KNOB_BLUE, knobBlueValue);
+//  processKnob(PIN_KNOB_RED, knobRedValue);
+  remote->loop();
+
+ //Serial.println(F("test 1!"));
+
+   // Serial.println(F("test 2!"));
 }
 
+//void processButton(int buttonId, char commandToSend) {
+//
+//  int buttonState = digitalRead(buttonId);
+//
+//  // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
+//  if (buttonState == HIGH) {
+//    Serial.print(F("command to send: "));
+//    Serial.println(commandToSend);
+//    bluetooth.write(commandToSend);
+//  } 
+//}
+//
+//
+//void processKnob(int knobId, int &knobValueOld) {
+//
+//  int knobValue = analogRead(knobId);
+//
+//  // TODO: a knob should make something going left and right.
+//  // One model is that the span of the knob's rotation covers the same span
+//  // that the thing is that we are moving.
+//  // Another model is that anything left of center means keep going to the left,
+//  // and a particular speed.  Moving the knob into it's center position means
+//  // to stop moving.
+//
+//  // If the value is different from the last value we knew about, 
+//  // we should probably tell the robot that the value changed.
+//  if (knobValue != knobValueOld) {
+//    
+//    Serial.print(F("knobId: "));
+//    Serial.print(knobId);
+//    Serial.print(F(", knobValue: "));
+//    Serial.println(knobValue);
+//
+//    knobValueOld = knobValue;
+//  }
+//}
 
-void processButton(int buttonId, char commandToSend) {
-
-  int buttonState = digitalRead(buttonId);
-
-  // check if the pushbutton is pressed. If it is, the buttonState is HIGH:
-  if (buttonState == HIGH) {
-    Serial.print("command to send: ");
-    Serial.println(commandToSend);
-    bluetooth.write(commandToSend);
-  } 
-}
-
-
-void processKnob(int knobId, int &knobValueOld) {
-
-  int knobValue = analogRead(knobId);
-
-  // TODO: a knob should make something going left and right.
-  // One model is that the span of the knob's rotation covers the same span
-  // that the thing is that we are moving.
-  // Another model is that anything left of center means keep going to the left,
-  // and a particular speed.  Moving the knob into it's center position means
-  // to stop moving.
-
-  // If the value is different from the last value we knew about, 
-  // we should probably tell the robot that the value changed.
-  if (knobValue != knobValueOld) {
-    
-    Serial.print("knobId: ");
-    Serial.print(knobId);
-    Serial.print(", knobValue: ");
-    Serial.println(knobValue);
-
-    knobValueOld = knobValue;
-  }
-}
 
 
 /**
@@ -566,12 +587,34 @@ boolean configReadString(int& memoryOffset, char *output, int outputMaxLen) {
  * Main output for status while in main sequence. This is called once per loop.
  */
 void displayStatus(String line1, String line2, String line3, String line4) {  
-  display.clear();
+  
+  //Serial.println("a");
+  //Serial.println(line1);
+  //Serial.println("b");
+  
+  //display.clear();
+
+//Serial.println("c");
+ 
+  
   display.setTextSize(1);
+
+  //Serial.println("d");
+ 
   display.setTextColor(WHITE);
+
+  //Serial.println("e");
+ 
+
+ //Serial.println("f");
+ 
+//display.clear();
 
   display.setCursor(0,2);
   display.println(line1);
+
+//Serial.println("a");
+  
 
   // Fun little animation to prove that we are not locked up.
   const int circleRadius = 5;
@@ -617,5 +660,11 @@ void displayStatus(String line1, String line2, String line3, String line4) {
   display.setCursor(4, beginStamp + 2);
   display.println(buildTimestamp);
 
+//Serial.println("a");
+  
+
   display.update();
+
+  //Serial.println("a");
+  
 }
