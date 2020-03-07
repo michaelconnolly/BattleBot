@@ -491,7 +491,7 @@ boolean switchToBluetoothCommandMode() {
        return true;
     } 
     delay(100);
-  }
+  } 
 
   Serial.println(F("bluetooth command mode FAILED to start"));
   return false;

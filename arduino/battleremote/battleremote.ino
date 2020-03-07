@@ -8,6 +8,7 @@
 #define PIN_BLUETOOTH_SEND 3
 #define PIN_BLUETOOTH_POWER 12
 #define PIN_BLUETOOTH_ENABLE 13
+#define PIN_BUTTON_1      8
 #define PIN_LED            10
 #define PIN_I2C_SDA        A4
 #define PIN_I2C_SCL        A5
@@ -55,6 +56,8 @@ unsigned long bluetoothPulseLastRecvTime = 0;
 
 // Driving state.
 char lastCommand = 0;
+int lastButton1State = LOW;
+boolean headlightState = false;
 
 /**
  * Entrypoint: called once when the program first starts, just to initialize all the sub-components.
@@ -82,6 +85,12 @@ void setup() {
   pinMode(PIN_JOYSTICK_X, INPUT);
   pinMode(PIN_JOYSTICK_Y, INPUT);
   Serial.println(F("setup: Joystick complete..."));
+
+  // Init buttons.
+  pinMode(PIN_BUTTON_1, INPUT_PULLUP);
+  lastButton1State = HIGH;
+  headlightState = false;
+  Serial.println(F("setup: Buttons complete..."));
 
   // Init the Bluetooth Module.
   pinMode(PIN_BLUETOOTH_POWER, OUTPUT);
@@ -188,6 +197,21 @@ void loop() {
     Serial.println(F("Sending stop"));
     bluetooth.write('S');
     lastCommand = 'S';
+  }
+
+  // Toggle the lights.
+  int button1State = digitalRead(PIN_BUTTON_1);
+  //Serial.print(F("Button state: "));
+  //Serial.println(button1State);
+  if (button1State != lastButton1State) {
+    lastButton1State = button1State;
+    Serial.println(F("Button toggle"));
+    if (lastButton1State == LOW) {
+      headlightState = !headlightState;
+      Serial.print(F("Headlight state now: "));
+      Serial.println(headlightState);
+      bluetooth.write(headlightState ? 'W' : 'w');
+    }
   }
     
   // Update the LED screen with our current state.
