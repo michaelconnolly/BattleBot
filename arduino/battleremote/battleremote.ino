@@ -32,6 +32,13 @@ char lastCommand = 0;
 int lastButton1State = LOW;
 boolean headlightState = false;
 
+// Driving state.
+//char lastCommand = 0;
+
+// Remote class that implements all business logic.
+battleRemoteIcharus* remote = new battleRemoteIcharus(&bluetooth);
+
+
 /**
  * Entrypoint: called once when the program first starts, just to initialize all the sub-components.
  */
@@ -67,13 +74,17 @@ void setup() {
 
   // Init Bluetooth.
   bluetooth.setup(&remoteConfig);
+  Serial.println(F("setup: Bluetooth complete..."));
 
+  // Custom Remote logic.
+  remote->setup();
+  
   // Init the OLED display.
   display.setup(buildTimestamp);
   Serial.println(F("setup: OLED complete..."));
 
   // Init the rest of our internal state.
-  lastCommand = 0;
+  //lastCommand = 0;
   Serial.println(F("setup: end"));
 }
 
@@ -129,7 +140,21 @@ void loop() {
     Serial.println(F("Sending stop"));
     bluetooth.write('S');
     lastCommand = 'S';
-  }
+  
+  // Update the LED screen with our current state.
+  bool connected = (bluetoothState == BLUETOOTH_CONNECTED);
+  int upSecs = (millis() - startTime) / 1000;
+  String joystickInfo = remote->getJoystickInfo();
+  
+  displayStatus(
+    connected ? F("CONNECTED") : F("DISCONNECTED"),
+    "runtime: " + String(upSecs) + ", bstate=" + String(bluetoothEnabled),
+    joystickInfo,
+    "dude: " + String("yo"));
+
+
+  // Loop: custom remote class.
+  remote->loop();
 
   // Toggle the lights.
   int button1State = digitalRead(PIN_BUTTON_1);
@@ -145,7 +170,7 @@ void loop() {
       bluetooth.write(headlightState ? 'W' : 'w');
     }
   }
-    
+   
   // Update the LED screen with our current state.
   updateDisplay(now, joystickX, joystickY);
 }
