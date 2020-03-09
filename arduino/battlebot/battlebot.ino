@@ -19,7 +19,7 @@
 #define PIN_I2C_SDA           A4
 #define PIN_I2C_SCL           A5
 #define PIN_SERVO             9
-
+ 
 // More Constants
 #define AUTO_SHUTOFF_TIME 30000
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
