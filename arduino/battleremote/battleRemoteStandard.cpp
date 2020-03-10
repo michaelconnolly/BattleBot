@@ -60,12 +60,13 @@ void battleRemoteStandard::loop() {
 
 String battleRemoteStandard::getName() {
 	
-	return "battle-remote Standard";
+	return F("battle-remote Standard");
 }
 
 
 String battleRemoteStandard::getJoystickInfo() {
 
+  //return F("stick: " + String(joystickX) + "/" + String(joystickY));
   return "stick: " + String(joystickX) + "/" + String(joystickY);
 }
 
