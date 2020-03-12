@@ -1,5 +1,4 @@
 #include <SoftwareSerial.h>
-#include <Wire.h>
 #include <SPI.h>
 
 
