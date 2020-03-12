@@ -1,7 +1,11 @@
+#ifndef __battleremote_icharus_h__
+#define __battleremote_icharus_h__
+
 #include "battleRemoteStandard.h"
 
-
-/**/
+/*
+ * Extended Remote with some knobs and more buttons.
+ */
 class battleRemoteIcharus : public battleRemoteStandard {
   public:
 	  battleRemoteIcharus(
@@ -19,3 +23,5 @@ class battleRemoteIcharus : public battleRemoteStandard {
 	  int _knob1Value;
     int _knob2Value;
 }; 
+
+#endif // __battleremote_icharus_h__

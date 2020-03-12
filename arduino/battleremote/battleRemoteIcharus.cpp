@@ -14,15 +14,18 @@
 
 /*
 */
-battleRemoteIcharus::battleRemoteIcharus( const char *buildStamp,
-     int pinSda, int pinScl,
-      int pinBlueRecv, int pinBlueSend, int pinBlueEnable,
-      int pinJoystickX, int pinJoystickY,
-      int pinButtonLight) : 
-  battleRemoteStandard(buildStamp, pinSda, pinScl,
-		pinBlueRecv, pinBlueSend, pinBlueEnable,
-		pinJoystickX, pinJoystickY,
-		pinButtonLight),
+battleRemoteIcharus::battleRemoteIcharus( 
+  const char *buildStamp,
+  int pinSda, int pinScl,
+  int pinBlueRecv, int pinBlueSend, int pinBlueEnable,
+  int pinJoystickX, int pinJoystickY,
+  int pinButtonLight) : 
+  battleRemoteStandard(
+	  buildStamp, 
+	  pinSda, pinScl,
+	  pinBlueRecv, pinBlueSend, pinBlueEnable,
+	  pinJoystickX, pinJoystickY,
+	  pinButtonLight),
   _knob1Value(0),
   _knob2Value(0) {
 }
@@ -41,9 +44,9 @@ void battleRemoteIcharus::setup() {
   pinMode(PIN_BUTTON_2, INPUT);
   pinMode(PIN_BUTTON_3, INPUT);
   pinMode(PIN_BUTTON_4, INPUT);
-  
   pinMode(PIN_KNOB_1, INPUT);
   pinMode(PIN_KNOB_2, INPUT);
+  
   Serial.println(F("\tmore knobs and buttons"));
 }
 	
