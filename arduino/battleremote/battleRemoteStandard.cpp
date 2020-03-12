@@ -3,8 +3,6 @@
 
 /*
 */
-
-
 battleRemoteStandard::battleRemoteStandard(
   const char * buildStamp,
   int pinSda, int pinScl,
@@ -83,27 +81,30 @@ void battleRemoteStandard::loop() {
     }
   }
   
-  // Process our input controls.
+  // Process our input controls. 
   processLightButton();
   processJoystick();
 }
 
+
 void battleRemoteStandard::processLightButton() {
 
   int buttonState = digitalRead(_pinButtonLight);
-  //Serial.print(F("Button state: "));
-  //Serial.println(button1State);
-  if (buttonState != _lastButtonLightState) {
+  Serial.print(F("Button state: "));
+  Serial.println(buttonState);
+  /*if (buttonState != _lastButtonLightState) {
     _lastButtonLightState = buttonState;
-    Serial.println(F("Button toggle"));
+    Serial.print("Button toggle");
+    Serial.println(_lastButtonLightState);
     if (_lastButtonLightState == LOW) {
      _lightState = !_lightState;
       Serial.print(F("Headlight state now: "));
       Serial.println(_lightState);
       _bluetooth.write(_lightState ? 'W' : 'w');
     }
-  }
+  } */
 }
+
 
 void battleRemoteStandard::processJoystick() {
   // Basic joystick control. TODO: we can get way more precise with this joystick!
