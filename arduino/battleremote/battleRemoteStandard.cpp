@@ -1,102 +1,139 @@
 #include "battleRemoteStandard.h"
 
-// Local variables.
-SoftwareSerial* _bluetooth;
 
-// Constants: joystick.
-#define PIN_JOYSTICK_X     A6
-#define PIN_JOYSTICK_Y     A7
-int joystickX;
-int joystickY;
-char lastCommand = 0;
-
-// Constants: knobs and buttons.
-#define PIN_BUTTON_1        4  // YELLOW
-#define COMMAND_BUTTON_1    '!'
-
-
-battleRemoteStandard::battleRemoteStandard(SoftwareSerial* bluetooth) {
-
-	_bluetooth = bluetooth;
+/*
+*/
+battleRemoteStandard::battleRemoteStandard(
+  const char * buildStamp,
+  int pinSda, int pinScl,
+  int pinBlueRecv, int pinBlueSend, int pinBlueEnable,
+  int pinJoystickX, int pinJoystickY,
+  int pinButtonLight) :
+  _startTime(millis()),
+  _buildStamp(buildStamp),
+  _display(pinSda, pinScl),
+  _bluetooth(pinBlueRecv, pinBlueSend, pinBlueEnable),
+  _pinJoystickX(pinJoystickX),
+  _pinJoystickY(pinJoystickY),
+  _valueJoystickX(512),
+  _valueJoystickY(512),
+  _pinButtonLight(pinButtonLight),
+  _lastButtonLightState(HIGH),
+  _lightState(false),
+  _lastCommand(0) {
 }
 
 
-SoftwareSerial* battleRemoteStandard::getBluetooth() {
-	
-	return _bluetooth;
-}
-
-
-battleRemoteStandard::~battleRemoteStandard() {
-
+const char *battleRemoteStandard::getName() {
+  return "battle-remote Standard";
 }
 
 
 void battleRemoteStandard::setup() {
+  Serial.print(F("setup: "));
+  Serial.println(getName());
+  
+  // Read our config/saved-state from the local disk. This will either be successful or reset to the default config.
+  _remoteConfig.configImport();
 
-	  Serial.print(F("setup: "));
-    Serial.println(this->getName());
+  // Init headlight button.
+  pinMode(_pinButtonLight, INPUT_PULLUP);
+  _lastButtonLightState = HIGH;
+  _lightState = false;
+  Serial.println(F("\tbutton light"));
 
-    // Init: knobs and buttons.
-    pinMode(PIN_BUTTON_1, INPUT);
-    Serial.println(F("\tknobs and buttons"));
-
-    // Init Joystick.
-    pinMode(PIN_JOYSTICK_X, INPUT);
-    pinMode(PIN_JOYSTICK_Y, INPUT);
-    Serial.println(F("\tjoystick"));
+  // Init Joystick.
+  pinMode(_pinJoystickX, INPUT);
+  pinMode(_pinJoystickY, INPUT);
+  Serial.println(F("\tjoystick"));
+  
+  // Init Bluetooth.
+  _bluetooth.setup(&_remoteConfig);
+  Serial.println(F("\tbluetooth"));
+  
+  // Init the OLED display.
+  _display.setup(_buildStamp);
+  Serial.println(F("\tdisplay"));
 }
 
 	
 void battleRemoteStandard::loop() {
 
-    // Loop: buttons and knobs.
-    processButton(PIN_BUTTON_1, COMMAND_BUTTON_1);
-
-    // Loop: joystick.
-    processJoystick(PIN_JOYSTICK_X, PIN_JOYSTICK_Y);
-}
-
-
-String battleRemoteStandard::getName() {
-	
-	return F("battle-remote Standard");
-}
-
-
-String battleRemoteStandard::getJoystickInfo() {
-
-  //return F("stick: " + String(joystickX) + "/" + String(joystickY));
-  return "stick: " + String(joystickX) + "/" + String(joystickY);
-}
-
-
-void battleRemoteStandard::processJoystick(int pinX, int pinY) {
+  // Advance the bluetooth state machine.
+  _bluetooth.loop();
+  if (_bluetooth.isEnabled() && !_display.isBluetoothSet()) {
+    _display.setupBluetoothName(
+    	_remoteConfig.bluetoothName, _remoteConfig.bluetoothAddr);
+  }
   
+   // Process incoming network commands from the robot.
+  for (int numCmds = 0; (numCmds < 100) && _bluetooth.ready() ; numCmds++) {
+    char cmd = _bluetooth.read();
+    switch (cmd) {
+      case '@':
+        Serial.println(F("Received pulse"));
+        break;
+  
+      default:
+        Serial.print(F("Received illegal command of: "));
+        Serial.println(cmd);
+        break;
+    }
+  }
+  
+  // Process our input controls. 
+  processLightButton();
+  processJoystick();
+}
+
+
+void battleRemoteStandard::processLightButton() {
+
+  int buttonState = digitalRead(_pinButtonLight);
+  //Serial.print(F("Button state: "));
+  //Serial.println(buttonState);
+  
+  if (buttonState != _lastButtonLightState) {
+    _lastButtonLightState = buttonState;
+    Serial.print("Button toggle");
+    Serial.println(_lastButtonLightState);
+    
+    if (_lastButtonLightState == LOW) {
+      
+     _lightState = !_lightState;
+      Serial.print(F("Headlight state now: "));
+      Serial.println(_lightState);
+      _bluetooth.write(_lightState ? 'W' : 'w');
+    }
+  }
+}
+
+
+void battleRemoteStandard::processJoystick() {
   // Basic joystick control. TODO: we can get way more precise with this joystick!
-  joystickX = analogRead(pinX);
-  joystickY = analogRead(pinY);
+  _valueJoystickX = analogRead(_pinJoystickX);
+  _valueJoystickY = analogRead(_pinJoystickY);
   
-  if (joystickY > 600) {
+  if (_valueJoystickY > 600) {
     Serial.println(F("Sending forward"));
-    _bluetooth->write('F');
-    lastCommand = 'F';
-  } else if (joystickY < 400) {
+    _bluetooth.write('F');
+    _lastCommand = 'F';
+  } else if (_valueJoystickY < 400) {
     Serial.println(F("Sending reverse"));
-    _bluetooth->write('B');
-    lastCommand = 'B';
-  } else if (joystickX > 600) {
+    _bluetooth.write('B');
+    _lastCommand = 'B';
+  } else if (_valueJoystickX > 600) {
     Serial.println(F("Sending right"));
-    _bluetooth->write('R');
-    lastCommand = 'R';
-  } else if (joystickX < 400) {
+    _bluetooth.write('R');
+    _lastCommand = 'R';
+  } else if (_valueJoystickX < 400) {
     Serial.println(F("Sending left"));
-    _bluetooth->write('L');
-    lastCommand = 'L';
-  } else if (lastCommand != 'S') {
+    _bluetooth.write('L');
+    _lastCommand = 'L';
+  } else if (_lastCommand != 'S') {
     Serial.println(F("Sending stop"));
-    _bluetooth->write('S');
-    lastCommand = 'S';
+    _bluetooth.write('S');
+    _lastCommand = 'S';
   }
 }
 
@@ -137,4 +174,19 @@ void battleRemoteStandard::processKnob(int knobId, int &knobValueOld) {
 
     knobValueOld = knobValue;
   }
+}
+
+void battleRemoteStandard::updateDisplay() {
+  // Format the Uptime.
+  int upSecs = (millis() - _startTime) / 1000;
+  char line1Buffer[25];
+  snprintf(line1Buffer, 25, "rtime: %2d  b:%d l:%d", 
+    upSecs, _bluetooth.isEnabled(), _lightState);
+
+  // Format the joystick.
+  char line2Buffer[25];
+  snprintf(line2Buffer, 25, "stick: %d/%d", _valueJoystickX, _valueJoystickY);
+
+  // Send to the display.
+  _display.displayConnectedStandard(_bluetooth.isConnected(), line1Buffer, line2Buffer);
 }
