@@ -90,19 +90,22 @@ void battleRemoteStandard::loop() {
 void battleRemoteStandard::processLightButton() {
 
   int buttonState = digitalRead(_pinButtonLight);
-  Serial.print(F("Button state: "));
-  Serial.println(buttonState);
-  /*if (buttonState != _lastButtonLightState) {
+  //Serial.print(F("Button state: "));
+  //Serial.println(buttonState);
+  
+  if (buttonState != _lastButtonLightState) {
     _lastButtonLightState = buttonState;
     Serial.print("Button toggle");
     Serial.println(_lastButtonLightState);
+    
     if (_lastButtonLightState == LOW) {
+      
      _lightState = !_lightState;
       Serial.print(F("Headlight state now: "));
       Serial.println(_lightState);
       _bluetooth.write(_lightState ? 'W' : 'w');
     }
-  } */
+  }
 }
 
 
@@ -177,7 +180,8 @@ void battleRemoteStandard::updateDisplay() {
   // Format the Uptime.
   int upSecs = (millis() - _startTime) / 1000;
   char line1Buffer[25];
-  snprintf(line1Buffer, 25, "rtime: %2d  b: %d", upSecs, _bluetooth.isEnabled());
+  snprintf(line1Buffer, 25, "rtime: %2d  b:%d l:%d", 
+    upSecs, _bluetooth.isEnabled(), _lightState);
 
   // Format the joystick.
   char line2Buffer[25];

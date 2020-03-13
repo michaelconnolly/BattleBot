@@ -41,7 +41,7 @@ class battleRemoteStandard {
     
     int 			_pinButtonLight;
     int 			_lastButtonLightState;
-    boolean 		_lightState;
+    boolean 	_lightState;
     
     char 			_lastCommand;
     

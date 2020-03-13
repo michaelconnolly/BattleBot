@@ -5,7 +5,7 @@
 #define PIN_BLUETOOTH_RECV    2
 #define PIN_BLUETOOTH_SEND    3
 #define PIN_BLUETOOTH_ENABLE  13
-#define PIN_BUTTON_LIGHT      8
+#define PIN_BUTTON_LIGHT      9
 #define PIN_I2C_SDA           A4
 #define PIN_I2C_SCL           A5
 #define PIN_JOYSTICK_X        A6
