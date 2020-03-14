@@ -1,39 +1,35 @@
 #include "battleRemoteCustomTemplate.h"
 
+// Constants: add here.
 
-// Constants and Globals: add here.
-
-
-battleRemoteCustomTemplate::battleRemoteCustomTemplate(SoftwareSerial* bluetooth) : battleRemoteStandard(bluetooth) {
-
+/* */
+battleRemoteCustomTemplate::battleRemoteCustomTemplate( const char *buildStamp,
+     int pinSda, int pinScl,
+      int pinBlueRecv, int pinBlueSend, int pinBlueEnable,
+      int pinJoystickX, int pinJoystickY,
+      int pinButtonLight) : 
+  battleRemoteStandard(buildStamp,
+      pinSda,  pinScl,
+       pinBlueRecv,  pinBlueSend,  pinBlueEnable,
+       pinJoystickX,  pinJoystickY,
+       pinButtonLight) {
 }
 
 
-battleRemoteCustomTemplate::~battleRemoteCustomTemplate() {
-
-}
-
-
-String battleRemoteCustomTemplate::getName() {
-	
-	return "battle-remote custom";
+const char *battleRemoteCustomTemplate::getName() {
+  return "battle-remote custom";
 }
 
 
 void battleRemoteCustomTemplate::setup() {
+  battleRemoteStandard::setup();
 
-  battleRemoteCustomTemplate::setup();
-
-   Serial.print(F("Setup: "));
-   Serial.println(this->getName());
-	
-	// Init: add here.
+  // Init: add here.
 }
 	
 
 void battleRemoteCustomTemplate::loop() {
-	
-	battleRemoteStandard::loop();
+  battleRemoteStandard::loop();
 
-	// Loop: add here.
+  // Loop: add here.
 }

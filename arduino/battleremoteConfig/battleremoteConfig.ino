@@ -1,5 +1,9 @@
 // Import external libraries
-#include <EEPROM.h>
+#include <SeaRobConfiguration.h>
+
+// Globals: the config
+SeaRobConfigRemote remoteConfig;
+
 
 /**
  * Entrypoint: called once when the program first starts, just to initialize all the sub-components.
@@ -16,32 +20,30 @@ void setup() {
   Serial.println();
   Serial.println(F("[Setting the BatteBot REMOTE configuration]\n"));
 
-  // Prompt for bluetooth name.
-  Serial.print(F("Enter the new bluetooth Name for the Remote: "));
-  String blueName = Serial.readStringUntil('\n');
-  Serial.println(blueName);
-
-  // Prompt for bluetooth address.
-  Serial.print(F("Enter the bluetooth address (for example: 98d3,b1,fd60df): "));
-  String blueAddr = Serial.readStringUntil('\n');
-  Serial.println(blueAddr);
-  Serial.println();
+  // Reset the config.
+  remoteConfig.configReset();
   
-  // Prompt for bluetooth password.
-  Serial.print(F("Enter the password for the device at that address: "));
-  String bluePass = Serial.readStringUntil('\n');
-  Serial.println(bluePass);
+  // Prompt for our config data.
+  promptForString(
+      "Enter the new bluetooth Name for the Remote: ", 
+      remoteConfig.bluetoothName, BLUETOOTH_MAX_NAME_LEN);
+  promptForString(
+      "Enter the bluetooth address (for example: 98d3,b1,fd60df): ", 
+      remoteConfig.bluetoothAddr, BLUETOOTH_MAX_ADDR_LEN);
+  promptForString(
+      "Enter the password for the device at that address: ", 
+      remoteConfig.bluetoothPass, BLUETOOTH_MAX_PASS_LEN);
   Serial.println();
 
   // Actually write out the config.
-  if (!configRemoteExport(blueName, blueAddr, bluePass)) {
+  if (!remoteConfig.configExport()) {
     Serial.println(F("Sorry, configuration failed."));
     return;
   }
 
   // Print successful result.
   Serial.print(F("\n\nBattleBot REMOTE Configuration successful for remote \""));
-  Serial.print(blueName);
+  Serial.print(remoteConfig.bluetoothName);
   Serial.println(F("\"!\nYou may proceed to running the BattleBot code now.\n"));
   Serial.println(F("------------------------------------------------"));
 }
@@ -52,63 +54,13 @@ void loop() {
 }
 
 
-/**
- *  CONFIG
+/* 
+ *  Reads one string from the serial input line.
  */
-
-
-boolean configRemoteExport(String blueName, String blueAddr, String bluePass) {
-
-  int memoryOffset = 0;
-  
-  // Write the magic number, and make sure it matches.
-  configWriteString(memoryOffset, "BTLRM");
-  
-  // Write the current Version of the config.
-  configWriteString(memoryOffset, "1");
-
-  // Bluetooth Name & passwd.
-  configWriteString(memoryOffset, blueName.c_str());
-  configWriteString(memoryOffset, blueAddr.c_str());
-  configWriteString(memoryOffset, bluePass.c_str());
-  
-  Serial.print(F("configExport: successful export of "));
-  Serial.print(memoryOffset);
-  Serial.println(" bytes");
-  return true;
-}
-
-
-/*
- */
-boolean configWriteString(int& memoryOffset, char *output) {
-
-  int outputLen = strlen(output);
-  if (memoryOffset + outputLen + 2 >= EEPROM.length()) {
-     Serial.println(F("configWriteString: blew eeprom buffer"));
-     return false;
-  }
-
-  // Loop through the string to be outputted.
-  for (int i = 0 ; i < outputLen ; i++) {
-    char c = output[i];
-    
-    // Make sure this is a cool character.
-    if (!isAscii(c)) {
-      Serial.print(F("configWriteString: illegal char: "));
-      Serial.println((int) c);
-      return false;
-    }
-    
-    // Write out to eeprom, and increment the current memory offset.
-    EEPROM[memoryOffset++] = c;
-  }
-
-  // Cap off with a nullbyte.
-  EEPROM[memoryOffset++] = 0;
-
-  // If we got here, we never hit the null byte.
-  Serial.print(F("configWriteString: wrote: "));
-  Serial.println(output);
-  return true;
+void promptForString(const char *prompt, char *readBuffer, int maxLen) {
+  Serial.print(prompt);
+  int numRead = Serial.readBytesUntil('\n', readBuffer, maxLen);
+  readBuffer[numRead] = 0;
+  Serial.print(readBuffer);
+  Serial.println();
 }
